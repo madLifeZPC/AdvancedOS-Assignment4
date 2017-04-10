@@ -1,0 +1,1 @@
+cmd_/home/zhaopengcheng/os/assignment4/fourmb_device.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/zhaopengcheng/os/assignment4/fourmb_device.ko /home/zhaopengcheng/os/assignment4/fourmb_device.o /home/zhaopengcheng/os/assignment4/fourmb_device.mod.o
