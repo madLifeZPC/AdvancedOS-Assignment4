@@ -8,15 +8,16 @@
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
 
-#define MAJOR_NUMBER 61
 #define DEVICE_NAME "fourmb_device"
 #define DEVICE_SIZE 4194304
+#define MAJOR_NUMBER 61
 
 /* forward declaration */
-int fourmb_device_open(struct inode *inode, struct file *filep);
-int fourmb_device_release(struct inode *inode, struct file *filep);
-ssize_t fourmb_device_read(struct file *filep, char *buf, size_t count, loff_t *f_pos);
-ssize_t fourmb_device_write(struct file *filep, const char *buf,size_t count, loff_t *f_pos);
+int fourmb_device_open(struct inode *inode, struct file *filp);
+int fourmb_device_release(struct inode *inode, struct file *filp);
+ssize_t fourmb_device_read(struct file *filp, char *buf, size_t count, loff_t *f_pos);
+ssize_t fourmb_device_write(struct file *filp, const char *buf,size_t count, loff_t *f_pos);
+loff_t fourmb_device_llseek(struct file *filp, loff_t off, int whence);
 static void fourmb_device_exit(void);
 
 /* definition of file_operation structure */
@@ -24,78 +25,12 @@ struct file_operations fourmb_device_fops = {
 	read: fourmb_device_read,
 	write: fourmb_device_write,
 	open: fourmb_device_open,
-	release: fourmb_device_release
+	release: fourmb_device_release,
+	llseek: fourmb_device_llseek
 };
 
 char *fourmb_device_data = NULL;
-
-int fourmb_device_open(struct inode *inode, struct file *filep)
-{
-	return 0; // always successful
-}
-
-int fourmb_device_release(struct inode *inode, struct file *filep)
-{
-	return 0; // always successful
-}
-
-ssize_t fourmb_device_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
-{
-	
-	ssize_t result = 0;
-	unsigned int read_size;
-
-        if(*f_pos >= DEVICE_SIZE || *f_pos<0 || fourmb_device_data[*f_pos] == '\0')
-		goto finish;
-
-	read_size = strnlen(fourmb_device_data, DEVICE_SIZE);
-	if((*f_pos + (long long int) count) > read_size)
-		count = read_size - *f_pos; 
-	
-
-	if(copy_to_user(buf, &(fourmb_device_data[*f_pos]), count)) {
-		printk(KERN_WARNING "%s: copy_to_user failed\n", DEVICE_NAME);
-		result = -EFAULT;
-		goto finish;
-	}
-
-	*f_pos += count;
-	result = count;
-
-finish:
-	printk(KERN_INFO "%s: fourmb_device_read complete\n", DEVICE_NAME);
-	return result;
-}
-
-ssize_t fourmb_device_write(struct file *filep, const char *buf,size_t count, loff_t *f_pos)
-{
-	
-	ssize_t result = 0;
-
-	if (*f_pos >= DEVICE_SIZE || *f_pos < 0) {
-		result = -EINVAL;
-		goto finish;
-	}
-
-	if ((*f_pos + (long long int) count) > DEVICE_SIZE)
-		count = DEVICE_SIZE - *f_pos;
-
-	if(copy_from_user(&(fourmb_device_data[*f_pos]), buf, count)) {
-		printk(KERN_WARNING "%s: copy_from_user failed\n", DEVICE_NAME);
-		result = -EFAULT;
-		goto finish;
-	}
-
-	*f_pos += count;
-	result = count;
-
-	if(*f_pos < DEVICE_SIZE)
-		fourmb_device_data[*f_pos] = '\0';
-
-finish:
-	printk(KERN_INFO "%s: fourmb_device_write complete\n", DEVICE_NAME);
-	return result;
-}
+long long int cur_size = 0;
 
 static int fourmb_device_init(void)
 {
@@ -118,7 +53,6 @@ static int fourmb_device_init(void)
 		return -ENOMEM;
 	}
 
-	//*fourmb_device_data = "Initial Value";
 	printk(KERN_ALERT "This is a fourmb_device device module\n");
 	return 0;
 }
@@ -135,6 +69,114 @@ static void fourmb_device_exit(void)
 	unregister_chrdev(MAJOR_NUMBER, "fourmb_device");
 	printk(KERN_ALERT "fourmb_device device module is unloaded\n");
 }
+
+int fourmb_device_open(struct inode *inode, struct file *filp)
+{
+	return 0; // always successful
+}
+
+int fourmb_device_release(struct inode *inode, struct file *filp)
+{
+	return 0; // always successful
+}
+
+loff_t fourmb_device_llseek(struct file* filp, loff_t off, int whence) {
+	
+	loff_t newpos;
+	
+	printk(KERN_INFO "%s: fourmb_device_llseek f_pos = %lld, off = %lld, whence = %d", DEVICE_NAME, filp->f_pos, off, whence);
+
+	switch(whence) {
+		case 0: // SEEK_SET
+		newpos = off;
+		break;
+
+		case 1: // SEEK_CUR
+		newpos = filp->f_pos + off;
+		break;
+
+		case 2: // SEEK_END
+		newpos = cur_size + off; // from end
+		printk(KERN_WARNING "%s: cur_size = %lld\n", DEVICE_NAME, cur_size);
+		break;
+
+		default: // invalid argument
+		printk(KERN_WARNING "%s: fourmb_device_llseek has invalid argument\n", DEVICE_NAME);
+		return -EINVAL;
+	}
+
+	if (newpos < 0 || newpos > cur_size )
+		return -EINVAL;
+
+
+	filp->f_pos = newpos;
+	printk(KERN_INFO "%s: fourmb_device_llseek seeked to newpos %llu\n", DEVICE_NAME, newpos);
+	return newpos;
+}
+
+ssize_t fourmb_device_read(struct file *filp, char *buf, size_t count, loff_t *f_pos)
+{
+	ssize_t result = 0;
+	unsigned int read_size;
+
+        if(*f_pos >= DEVICE_SIZE || *f_pos<0 || fourmb_device_data[*f_pos] == '\0')
+		goto finish;
+
+	read_size = strnlen(fourmb_device_data, DEVICE_SIZE);
+	if((*f_pos + (long long int) count) > read_size)
+		count = read_size - *f_pos; 
+	
+
+	if(copy_to_user(buf, &(fourmb_device_data[*f_pos]), count)) {
+		printk(KERN_WARNING "%s: copy_to_user failed\n", DEVICE_NAME);
+		result = -EFAULT;
+		goto finish;
+	}
+
+	*f_pos += count;
+	result = count;
+	cur_size -= count;
+	if( cur_size<0 )
+		cur_size =0;
+
+finish:
+	printk(KERN_INFO "%s: fourmb_device_read complete\n", DEVICE_NAME);
+	return result;
+}
+
+ssize_t fourmb_device_write(struct file *filp, const char *buf,size_t count, loff_t *f_pos)
+{
+	
+	ssize_t result = 0;
+
+	if (*f_pos >= DEVICE_SIZE || *f_pos < 0) {
+		result = -EINVAL;
+		goto finish;
+	}
+
+	if ((*f_pos + (long long int) count) > DEVICE_SIZE)
+		count = DEVICE_SIZE - *f_pos;
+
+	if(copy_from_user(&(fourmb_device_data[*f_pos]), buf, count)) {
+		printk(KERN_WARNING "%s: copy_from_user failed\n", DEVICE_NAME);
+		result = -EFAULT;
+		goto finish;
+	}
+
+	*f_pos += count;
+	result = count;
+	cur_size += count;
+	if( cur_size > DEVICE_SIZE)
+		cur_size = DEVICE_SIZE;
+
+	if(*f_pos < DEVICE_SIZE)
+		fourmb_device_data[*f_pos] = '\0';
+
+finish:
+	printk(KERN_INFO "%s: fourmb_device_write complete\n", DEVICE_NAME);
+	return result;
+}
+
 
 MODULE_LICENSE("GPL");
 module_init(fourmb_device_init);
