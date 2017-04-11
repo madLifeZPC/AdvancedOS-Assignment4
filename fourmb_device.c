@@ -9,6 +9,8 @@
 #include <asm/uaccess.h>
 
 #define MAJOR_NUMBER 61
+#define DEVICE_NAME "fourmb_device"
+#define DEVICE_SIZE 4194304
 
 /* forward declaration */
 int fourmb_device_open(struct inode *inode, struct file *filep);
@@ -39,33 +41,60 @@ int fourmb_device_release(struct inode *inode, struct file *filep)
 
 ssize_t fourmb_device_read(struct file *filep, char *buf, size_t count, loff_t *f_pos)
 {
-	if(copy_to_user(buf, fourmb_device_data, 1))
-	{
-		return -EFAULT; // error happens
+	
+	ssize_t result = 0;
+	unsigned int read_size;
+
+        if(*f_pos >= DEVICE_SIZE || *f_pos<0 || fourmb_device_data[*f_pos] == '\0')
+		goto finish;
+
+	read_size = strnlen(fourmb_device_data, DEVICE_SIZE);
+	if((*f_pos + (long long int) count) > read_size)
+		count = read_size - *f_pos; 
+	
+
+	if(copy_to_user(buf, &(fourmb_device_data[*f_pos]), count)) {
+		printk(KERN_WARNING "%s: copy_to_user failed\n", DEVICE_NAME);
+		result = -EFAULT;
+		goto finish;
 	}
-	*f_pos += 1;
-	if(*f_pos > 1)
-	{
-		return 0;
-	}
-	return 1;
+
+	*f_pos += count;
+	result = count;
+
+finish:
+	printk(KERN_INFO "%s: fourmb_device_read complete\n", DEVICE_NAME);
+	return result;
 }
 
 ssize_t fourmb_device_write(struct file *filep, const char *buf,size_t count, loff_t *f_pos)
 {
-	if(*f_pos == 0)
-	{
-		if(copy_from_user(fourmb_device_data, buf, 1))
-		{
-			return -EFAULT; // error happens
-		}
-		*f_pos += 1;
-		return 1;
+	
+	ssize_t result = 0;
+
+	if (*f_pos >= DEVICE_SIZE || *f_pos < 0) {
+		result = -EINVAL;
+		goto finish;
 	}
-	else
-	{
-		return -ENOSPC; // No space left on device
+
+	if ((*f_pos + (long long int) count) > DEVICE_SIZE)
+		count = DEVICE_SIZE - *f_pos;
+
+	if(copy_from_user(&(fourmb_device_data[*f_pos]), buf, count)) {
+		printk(KERN_WARNING "%s: copy_from_user failed\n", DEVICE_NAME);
+		result = -EFAULT;
+		goto finish;
 	}
+
+	*f_pos += count;
+	result = count;
+
+	if(*f_pos < DEVICE_SIZE)
+		fourmb_device_data[*f_pos] = '\0';
+
+finish:
+	printk(KERN_INFO "%s: fourmb_device_write complete\n", DEVICE_NAME);
+	return result;
 }
 
 static int fourmb_device_init(void)
@@ -77,11 +106,11 @@ static int fourmb_device_init(void)
 		return result;
 	}
 
-	// allocate one byte of memory for storage
+	// allocate 4MB of memory for storage
 	// kmalloc is just like malloc, the second parameter is
 	// the type of memory to be allocated.
 	// To release the memory allocated by kmalloc, use kfree.
-	fourmb_device_data = kmalloc(sizeof(char), GFP_KERNEL);
+	fourmb_device_data = kmalloc(sizeof(char)*DEVICE_SIZE, GFP_KERNEL);
 	if (!fourmb_device_data) {
 		fourmb_device_exit();
 		// cannot allocate memory
@@ -89,8 +118,7 @@ static int fourmb_device_init(void)
 		return -ENOMEM;
 	}
 
-	// initialize the value to be X
-	*fourmb_device_data = 'X';
+	//*fourmb_device_data = "Initial Value";
 	printk(KERN_ALERT "This is a fourmb_device device module\n");
 	return 0;
 }
