@@ -19,3 +19,6 @@ cat /dev/fourmb_device
 
 gcc test_write.c -o test_write
 sudo ./test_write
+
+gcc test_ioctl.c -o test_ioctl
+sudo ./test_ioctl

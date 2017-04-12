@@ -797,6 +797,7 @@ deps_/home/zhaopengcheng/os/assignment4/fourmb_device.o := \
   arch/x86/include/asm/smap.h \
     $(wildcard include/config/x86/smap.h) \
   arch/x86/include/asm/uaccess_64.h \
+  include/linux/file.h \
 
 /home/zhaopengcheng/os/assignment4/fourmb_device.o: $(deps_/home/zhaopengcheng/os/assignment4/fourmb_device.o)
 

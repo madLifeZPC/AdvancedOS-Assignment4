@@ -7,10 +7,16 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <asm/uaccess.h>
+#include <linux/ioctl.h>
+#include <linux/file.h>
 
 #define DEVICE_NAME "fourmb_device"
 #define DEVICE_SIZE 4194304
 #define MAJOR_NUMBER 61
+
+#define SCULL_IOC_MAGIC 'k'
+#define SCULL_IOC_MAXNR 4
+#define SCULL_HELLO _IO(SCULL_IOC_MAGIC, 1)
 
 /* forward declaration */
 int fourmb_device_open(struct inode *inode, struct file *filp);
@@ -19,6 +25,7 @@ ssize_t fourmb_device_read(struct file *filp, char *buf, size_t count, loff_t *f
 ssize_t fourmb_device_write(struct file *filp, const char *buf,size_t count, loff_t *f_pos);
 loff_t fourmb_device_llseek(struct file *filp, loff_t off, int whence);
 static void fourmb_device_exit(void);
+long fourmb_device_ioctl(struct file *filp, unsigned int cmd, unsigned long arg); 
 
 /* definition of file_operation structure */
 struct file_operations fourmb_device_fops = {
@@ -26,7 +33,8 @@ struct file_operations fourmb_device_fops = {
 	write: fourmb_device_write,
 	open: fourmb_device_open,
 	release: fourmb_device_release,
-	llseek: fourmb_device_llseek
+	llseek: fourmb_device_llseek,
+	unlocked_ioctl : fourmb_device_ioctl
 };
 
 char *fourmb_device_data = NULL;
@@ -79,6 +87,38 @@ int fourmb_device_release(struct inode *inode, struct file *filp)
 {
 	return 0; // always successful
 }
+
+long fourmb_device_ioctl(struct file *filp, unsigned int cmd, unsigned long arg){
+    
+	int err = 0;
+	int retval = 0;
+	//printk(KERN_WARNING "start ioctl1\n");
+
+	if(_IOC_TYPE(cmd) != SCULL_IOC_MAGIC) return -ENOTTY;
+	if(_IOC_NR(cmd) > SCULL_IOC_MAXNR) return -ENOTTY;
+
+	//printk(KERN_WARNING "start ioctl2\n");
+
+	if (_IOC_DIR(cmd) & _IOC_READ)
+		err = !access_ok(VERIFY_WRITE, (void *)arg, _IOC_SIZE(cmd));
+	else if (_IOC_DIR(cmd) & _IOC_WRITE)
+		err = !access_ok(VERIFY_READ, (void *)arg, _IOC_SIZE(cmd));
+	if (err) 
+		return -EFAULT;
+
+	//printk(KERN_WARNING "start ioctl3\n");
+
+	switch(cmd){
+		case SCULL_HELLO:
+		    printk(KERN_WARNING "hello from ioctl\n");
+		    break;
+		default:
+		    return -ENOTTY;
+	}
+
+	return retval;
+}
+
 
 loff_t fourmb_device_llseek(struct file* filp, loff_t off, int whence) {
 	
