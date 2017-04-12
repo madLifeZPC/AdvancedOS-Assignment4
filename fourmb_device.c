@@ -20,6 +20,7 @@
 #define SCULL_HELLO _IO(SCULL_IOC_MAGIC, 1)
 #define SET_DEV_MSG _IOW(SCULL_IOC_MAGIC, 2, char*)
 #define GET_DEV_MSG _IOR(SCULL_IOC_MAGIC, 3, char*)
+#define WR_DEV_MSG _IOWR(SCULL_IOC_MAGIC, 4, char*)
 
 /* forward declaration */
 int fourmb_device_open(struct inode *inode, struct file *filp);
@@ -107,6 +108,7 @@ long fourmb_device_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
     
 	int err = 0;
 	int retval = 0;
+	char *tmp = NULL;
 	//printk(KERN_WARNING "start ioctl1\n");
 
 	if(_IOC_TYPE(cmd) != SCULL_IOC_MAGIC) return -ENOTTY;
@@ -138,6 +140,19 @@ long fourmb_device_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		        return -EFAULT;
 		    }
 		    printk(KERN_ALERT "ioctl get dev_msg: %s", dev_msg);
+		    break;
+		case WR_DEV_MSG:
+		    tmp = kmalloc(DEV_MSG_SIZE, GFP_KERNEL);
+		        if(copy_from_user(tmp, (char *)arg,  DEV_MSG_SIZE)){
+		        return -EFAULT;
+		    }
+
+		    if(copy_to_user((char *)arg, dev_msg, DEV_MSG_SIZE)){
+		        return -EFAULT;
+		    }
+		    strcpy(dev_msg, tmp);
+		    printk(KERN_ALERT "dev_msg after _IOWR is: %s\n", dev_msg);
+		    kfree(tmp);
 		    break;
 		default:
 		    return -ENOTTY;

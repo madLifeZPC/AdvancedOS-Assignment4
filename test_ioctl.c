@@ -9,6 +9,7 @@
 #define SCULL_HELLO _IO(SCULL_IOC_MAGIC, 1)
 #define SET_DEV_MSG _IOW(SCULL_IOC_MAGIC, 2, char*)
 #define GET_DEV_MSG _IOR(SCULL_IOC_MAGIC, 3, char*)
+#define WR_DEV_MSG _IOWR(SCULL_IOC_MAGIC, 4, char*)
 
 int lcd;
 
@@ -39,6 +40,15 @@ void test()
 		return ;
 	}
 	printf("user_msg is: %s\n", user_msg);
+
+
+	char *new_user_msg = "The new message!\n";
+	strcpy(user_msg, new_user_msg);
+	if(k = ioctl(lcd, WR_DEV_MSG, user_msg)){
+		printf("_IOWR ioctl exchange message fail\n");
+		return ;
+	}
+	printf("user_msg is: %s \n", user_msg);
 	free(user_msg);
 }
 
