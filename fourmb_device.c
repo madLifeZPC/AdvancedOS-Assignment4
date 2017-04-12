@@ -12,11 +12,14 @@
 
 #define DEVICE_NAME "fourmb_device"
 #define DEVICE_SIZE 4194304
+#define DEV_MSG_SIZE 60
 #define MAJOR_NUMBER 61
 
 #define SCULL_IOC_MAGIC 'k'
 #define SCULL_IOC_MAXNR 4
 #define SCULL_HELLO _IO(SCULL_IOC_MAGIC, 1)
+#define SET_DEV_MSG _IOW(SCULL_IOC_MAGIC, 2, char*)
+#define GET_DEV_MSG _IOR(SCULL_IOC_MAGIC, 3, char*)
 
 /* forward declaration */
 int fourmb_device_open(struct inode *inode, struct file *filp);
@@ -38,6 +41,7 @@ struct file_operations fourmb_device_fops = {
 };
 
 char *fourmb_device_data = NULL;
+char *dev_msg = NULL;
 long long int cur_size = 0;
 
 static int fourmb_device_init(void)
@@ -61,6 +65,13 @@ static int fourmb_device_init(void)
 		return -ENOMEM;
 	}
 
+	// allocate memory for the message
+	dev_msg = kmalloc(DEV_MSG_SIZE, GFP_KERNEL);
+	if(!dev_msg){
+	 fourmb_device_exit();
+	 return -ENOMEM;
+	}
+
 	printk(KERN_ALERT "This is a fourmb_device device module\n");
 	return 0;
 }
@@ -73,6 +84,10 @@ static void fourmb_device_exit(void)
 		kfree(fourmb_device_data);
 		fourmb_device_data = NULL;
 	}
+	if(dev_msg){
+		kfree(dev_msg);
+		dev_msg = NULL;
+     	}
 	// unregister the device
 	unregister_chrdev(MAJOR_NUMBER, "fourmb_device");
 	printk(KERN_ALERT "fourmb_device device module is unloaded\n");
@@ -111,6 +126,18 @@ long fourmb_device_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	switch(cmd){
 		case SCULL_HELLO:
 		    printk(KERN_WARNING "hello from ioctl\n");
+		    break;
+		case SET_DEV_MSG:
+		    if(copy_from_user(dev_msg, (char *)arg, DEV_MSG_SIZE)){
+		        return -EFAULT;
+		    }
+		    printk(KERN_ALERT "ioctl set dev_msg: %s", dev_msg);
+		    break;
+		case GET_DEV_MSG:
+		    if(copy_to_user((char *)arg, dev_msg, DEV_MSG_SIZE)){
+		        return -EFAULT;
+		    }
+		    printk(KERN_ALERT "ioctl get dev_msg: %s", dev_msg);
 		    break;
 		default:
 		    return -ENOTTY;

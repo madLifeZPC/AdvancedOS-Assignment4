@@ -7,6 +7,8 @@
 
 #define SCULL_IOC_MAGIC 'k'
 #define SCULL_HELLO _IO(SCULL_IOC_MAGIC, 1)
+#define SET_DEV_MSG _IOW(SCULL_IOC_MAGIC, 2, char*)
+#define GET_DEV_MSG _IOR(SCULL_IOC_MAGIC, 3, char*)
 
 int lcd;
 
@@ -24,6 +26,20 @@ void test()
 	k = ioctl(lcd, SCULL_HELLO);
 	
 	printf("result = %d\n", k);
+
+	char *pre_msg = "The predefined message\n";
+	if(k = ioctl(lcd, SET_DEV_MSG, pre_msg)){
+		printf("ioctl set message fail\n");
+		return ;
+	}
+
+	char *user_msg = (char *)malloc(60);
+	if(k = ioctl(lcd, GET_DEV_MSG, user_msg)){
+		printf("_IOR ioctl get message fail\n");
+		return ;
+	}
+	printf("user_msg is: %s\n", user_msg);
+	free(user_msg);
 }
 
 int main(int argc, char **argv)
